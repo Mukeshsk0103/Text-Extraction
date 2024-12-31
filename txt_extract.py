@@ -20,7 +20,7 @@ def main():
     pytesseract.pytesseract.tesseract_cmd = path_to_tesseract
     image_path = "test1.jpg"
 
-    while cv2.waitKey(400):
+    while True:
         # Read video frame
         ret, frame = video_stream.read()
 
@@ -43,7 +43,7 @@ def main():
         # txt_write.write(text)
 
         # Print the extracted text in the console
-        print(text)
+        # print(text)
         
 
         # Check for the 'q' key press to quit
@@ -51,8 +51,8 @@ def main():
         #     break
 
     # Release the video stream
-    video_stream.release()
-    cv2.destroyAllWindows()
+    # video_stream.release()
+    # cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
