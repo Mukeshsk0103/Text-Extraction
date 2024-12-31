@@ -27,31 +27,60 @@ def main():
 
     # JavaScript to capture webcam frame and send it to Streamlit
     html_code = """
-    <video id="video" autoplay></video>
-    <button id="capture">Capture Frame</button>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Camera Stream</title>
+</head>
+<body>
+    <h1>Live Camera Stream</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="capture">Capture Image</button>
+    <canvas id="canvas" style="display: none;"></canvas>
+    <img id="captured-image" alt="Captured Image" style="display:none;">
+
     <script>
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
         const captureButton = document.getElementById('capture');
+        const canvas = document.getElementById('canvas');
+        const capturedImage = document.getElementById('captured-image');
 
-        // Access the user's webcam
+        // Get the webcam stream and display it in the video element
         navigator.mediaDevices.getUserMedia({ video: true })
-            .then((stream) => { video.srcObject = stream; })
-            .catch((err) => { console.error("Webcam not accessible: ", err); });
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error accessing webcam: ", err);
+            });
 
-        // Capture a frame
+        // Capture the image when the button is clicked
         captureButton.addEventListener('click', () => {
             const context = canvas.getContext('2d');
+            // Set canvas size to match video dimensions
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+
+            // Draw the current frame from the video onto the canvas
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const data = canvas.toDataURL('image/png');
-            
-            // Send data to Streamlit via session state
-            Streamlit.setComponentValue(data);
+
+            // Convert the canvas to an image and display it
+            const imageData = canvas.toDataURL('image/png');
+            capturedImage.src = imageData;
+            capturedImage.style.display = 'block'; // Show the captured image
+
+            // Create a link for the image data to simulate a download
+            const link = document.createElement('a');
+            link.href = imageData;
+            link.download = 'captured-image.png'; // Set default file name
+
+            // Automatically trigger the download without clicking
+            link.click();
         });
     </script>
+</body>
+</html>
     """
 
     # Placeholder for the webcam feed and OCR result
