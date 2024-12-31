@@ -1,58 +1,94 @@
-import cv2
-import pytesseract
-from PIL import Image
 import streamlit as st
+from PIL import Image
+import pytesseract
+import base64
+import io
+
+# Path to Tesseract
+path_to_tesseract = '/usr/bin/tesseract'
+pytesseract.pytesseract.tesseract_cmd = path_to_tesseract
+
+def process_image(data_url):
+    """Decode base64 image data from the JavaScript webcam stream."""
+    header, encoded = data_url.split(",", 1)
+    binary_data = base64.b64decode(encoded)
+    image_data = io.BytesIO(binary_data)
+    return Image.open(image_data)
 
 def main():
     st.title("Webcam Video Stream with OCR")
 
-    # Access the webcam
-    url = "http://192.168.219.70:8080/video"
-    video_stream = cv2.VideoCapture(0)  # Use 0 for default webcam, change to 1 or other index for external cameras
+    st.subheader("Live Webcam Feed and OCR")
 
-    st.subheader("Live Webcam Feed")
-    video_placeholder = st.empty()
-    txt_html = st.empty()
-    txt_write = st.empty()
+    # JavaScript for webcam stream
+    html_code = """
+    <video id="video" autoplay></video>
+    <button id="capture">Capture</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <img id="photo" alt="Captured Image">
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photo = document.getElementById('photo');
+        const captureButton = document.getElementById('capture');
 
-    # Initialize the path to Tesseract
-    path_to_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    pytesseract.pytesseract.tesseract_cmd = path_to_tesseract
-    image_path = "test1.jpg"
+        // Access the user's webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => { video.srcObject = stream; })
+            .catch((err) => { console.error("Webcam not accessible: ", err); });
 
-    while True:
-        # Read video frame
-        ret, frame = video_stream.read()
+        // Capture a frame
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const data = canvas.toDataURL('image/png');
+            photo.setAttribute('src', data);
 
-        if not ret:
-            st.warning("Unable to read from webcam. Please ensure the webcam is connected.")
-            break
+            // Send captured image to backend via Streamlit
+            fetch('/_st_capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: data })
+            }).then(response => response.json())
+              .then(data => {
+                  console.log("OCR Result:", data.text);
+                  document.getElementById('ocr-result').innerText = data.text;
+              }).catch(error => console.error("Error:", error));
+        });
+    </script>
+    <div id="ocr-result"></div>
+    """
 
-        # Convert BGR (OpenCV default) to RGB (Streamlit compatible)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    st.components.v1.html(html_code, height=600)
 
-        # Display the video frame in the Streamlit app
-        video_placeholder.image(frame_rgb, channels="RGB",)
+    # Backend to handle OCR processing
+    if "image_data" not in st.session_state:
+        st.session_state["image_data"] = None
 
-        # Convert frame to grayscale and perform OCR
-        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cv2.imwrite('test1.jpg',cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
-        text = pytesseract.image_to_string(Image.open(image_path))
-        # text = pytesseract.image_to_string(gray)
-        txt_html.html(f"<h1>{text}</h1></br>")
-        # txt_write.write(text)
+    def handle_image_upload(data_url):
+        img = process_image(data_url)
+        text = pytesseract.image_to_string(img)
+        return text
 
-        # Print the extracted text in the console
-        # print(text)
-        
+    # Mock HTTP endpoint for JavaScript interaction
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-        # Check for the 'q' key press to quit
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break
+    ctx = get_script_run_ctx()
+    if ctx is not None:
+        # Register a custom Streamlit route
+        import streamlit.web.server.websocket_headers as wh
 
-    # Release the video stream
-    # video_stream.release()
-    # cv2.destroyAllWindows()
+        @wh.app.route("/_st_capture", methods=["POST"])
+        def capture_route():
+            from flask import request, jsonify
+            data = request.json
+            image_data = data.get("image")
+            if image_data:
+                ocr_text = handle_image_upload(image_data)
+                return jsonify({"text": ocr_text})
+            return jsonify({"error": "No image provided"}), 400
 
 if __name__ == "__main__":
     main()
