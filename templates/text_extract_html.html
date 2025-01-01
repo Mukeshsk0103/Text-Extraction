@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Webcam Streaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        video {
+            border: 1px solid black;
+            margin: 10px;
+        }
+        #extracted-text {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #333;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Live Webcam Streaming with Auto Image Upload</h1>
+    <video id="webcam" autoplay playsinline width="640" height="480"></video>
+    <canvas id="snapshot" width="640" height="480" style="display:none;"></canvas>
+
+    <div id="extracted-text">
+        <p>No text extracted yet.</p>
+    </div>
+
+    <script>
+        const webcamElement = $('#webcam')[0];
+        const canvasElement = $('#snapshot')[0];
+        const ctx = canvasElement.getContext('2d');
+        const extractedTextDiv = $('#extracted-text');
+
+        // Start webcam streaming
+        function startWebcam() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    webcamElement.srcObject = stream;
+                })
+                .catch(function(error) {
+                    console.error("Error accessing webcam:", error);
+                    alert("Unable to access webcam. Please ensure you have granted permission.");
+                });
+        }
+
+        // Capture an image and send it to the server
+        function captureAndUploadImage() {
+            // Draw the video frame to the canvas
+            ctx.drawImage(webcamElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            // Convert the canvas image to a Blob
+            canvasElement.toBlob(function(blob) {
+                // Create a FormData object to send the image
+                let formData = new FormData();
+                formData.append('image', blob, 'captured_image_' + Date.now() + '.png');
+
+                // Send the image to the Flask server using jQuery's ajax
+                $.ajax({
+                    url: '/upload',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        console.log("Server response:", response);  // Debugging output
+
+                        if (response.extracted_text) {
+                            // Update the extracted text div with the server response
+                            extractedTextDiv.html('<h2>Extracted Text:</h2><p>' + response.extracted_text + '</p>');
+                        } else {
+                            extractedTextDiv.html('<p>No text extracted.</p>');
+                        }
+                    },
+                    error: function(error) {
+                        console.error("Error uploading image:", error);
+                    }
+                });
+            }, 'image/png');
+        }
+
+        // Capture images at a 5-second interval
+        function startAutoCapture() {
+            setInterval(captureAndUploadImage, 5000); // Capture an image every 5 seconds
+        }
+
+        // Start the webcam stream and auto-capture
+        startWebcam();
+        startAutoCapture();
+    </script>
+</body>
+</html>
