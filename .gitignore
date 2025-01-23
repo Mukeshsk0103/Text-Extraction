@@ -1,2 +1,3 @@
-requirements.txt
 other_env/
+*.png
+*.jpg
